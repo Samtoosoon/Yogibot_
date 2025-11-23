@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YogiBot Space Edition</title>
+    
+    <!-- React & Tailwind via CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- TAILWIND CONFIG -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    typography: {
+                        DEFAULT: {
+                            css: {
+                                // GLOBAL TEXT COLOR: White
+                                color: '#ffffff', 
+                                
+                                // SPECIFIC ELEMENTS FORCE OVERRIDE
+                                p: { color: '#ffffff !important' },   // Paragraphs
+                                li: { color: '#ffffff !important' },  // List items
+                                strong: { color: '#ffffff !important', fontWeight: '700' }, // Bold text
+                                em: { color: '#ffffff !important' }, // Italic text
+                                span: { color: '#ffffff !important' }, // Spans
+                                
+                                // HEADINGS
+                                h1: { color: '#ffffff !important', fontWeight: '800' },
+                                h2: { color: '#ffffff !important', fontWeight: '700' },
+                                h3: { color: '#ffffff !important', fontWeight: '600' },
+                                h4: { color: '#ffffff !important', fontWeight: '600' },
+                                h5: { color: '#ffffff !important', fontWeight: '600' },
+                                h6: { color: '#ffffff !important', fontWeight: '600' },
+                                
+                                // CODE BLOCKS (Solid Dark Background)
+                                code: { 
+                                    color: '#38bdf8 !important', 
+                                    backgroundColor: '#020617', 
+                                    padding: '3px 6px', 
+                                    borderRadius: '4px', 
+                                    fontWeight: '600', 
+                                    border: '1px solid #1e293b' 
+                                },
+                                'code::before': { content: '""' },
+                                'code::after': { content: '""' },
+                                
+                                // PRE BLOCKS
+                                pre: { 
+                                    color: '#ffffff !important',
+                                    backgroundColor: '#020617 !important'
+                                },
+                                
+                                // QUOTES
+                                blockquote: { 
+                                    color: '#ffffff !important', 
+                                    borderLeftColor: '#38bdf8', 
+                                    backgroundColor: '#0f172a', 
+                                    padding: '1rem',
+                                    borderRadius: '0.5rem'
+                                },
+                                
+                                // LINKS
+                                a: { color: '#38bdf8 !important', textDecoration: 'underline', fontWeight: '500' },
+                            },
+                        },
+                    },
+                },
+            },
+        }
+    </script>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f0f9ff; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* --- SCROLLBAR STYLING --- */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+
+        /* MARKDOWN CODE BLOCKS (SOLID & SHARP) */
+        /* Force solid black/dark-blue background, no transparency */
+        pre { background: #020617 !important; padding: 1.5rem; border-radius: 0.75rem; border: 1px solid #1e293b; overflow-x: auto; }
+        
+        /* FORCE ALL TEXT IN OUTPUT TO BE WHITE */
+        .prose * {
+            color: #ffffff !important;
+        }
+        
+        .prose code {
+            color: #38bdf8 !important;
+        }
+        
+        .prose a {
+            color: #38bdf8 !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('coder');
+            // API Key state removed - handled by backend
+            const [loading, setLoading] = useState(false);
+            const [result, setResult] = useState(null);
+            
+            // Coder State
+            const [mode, setMode] = useState('Generate Code');
+            const [lang, setLang] = useState('Python');
+            const [query, setQuery] = useState('');
+            const [codeSnippet, setCodeSnippet] = useState('');
+            
+            // Summarizer State
+            const [articleText, setArticleText] = useState('');
+
+            const outputRef = useRef(null);
+
+            const handleExecute = async () => {
+                setLoading(true);
+                setResult(null);
+
+                try {
+                    let endpoint = activeTab === 'coder' ? '/api/chat' : '/api/summarize';
+                    let payload = activeTab === 'coder' 
+                        ? { mode, language: lang, query, code: codeSnippet }
+                        : { text: articleText };
+
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await res.json();
+                    if(!res.ok) throw new Error(data.detail);
+                    setResult(data);
+                    if(outputRef.current) outputRef.current.scrollTop = 0;
+                } catch (err) {
+                    alert("Error: " + err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // --- STYLING CONSTANTS ---
+            const glassBoxClass = "w-full bg-slate-950/60 border border-white/10 rounded-xl p-3 text-sm text-slate-200 focus:border-sky-500/80 focus:ring-1 focus:ring-sky-500/50 outline-none transition-all shadow-lg backdrop-blur-md placeholder-slate-500";
+            const labelClasses = "block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wider drop-shadow-md";
+
+            return (
+                // MAIN CONTAINER
+                <div className="flex h-screen w-full overflow-hidden bg-[url('/static/galaxy.jpg')] bg-cover bg-center bg-fixed text-slate-200">
+                    
+                    {/* SIDEBAR */}
+                    <div className="w-64 bg-slate-950/30 border-r border-white/5 flex flex-col p-6 justify-between flex-shrink-0 z-20">
+                        <div>
+                            {/* LOGO */}
+                            <div className="flex items-center gap-3 mb-10 select-none">
+                                <div className="bg-sky-500/10 p-1.5 rounded-xl border border-sky-500/20 backdrop-blur-sm">
+                                    <img src="/static/logo.jpg" alt="Logo" className="w-8 h-8 object-contain drop-shadow-lg" />
+                                </div>
+                                <div>
+                                    <h1 className="text-lg font-black tracking-tight text-white leading-none drop-shadow-md">Yogi<span className="text-sky-400">Bot</span></h1>
+                                    <span className="text-[10px] font-medium text-sky-200/80 tracking-wider uppercase">Space Edition</span>
+                                </div>
+                            </div>
+                            
+                            <nav className="space-y-3 font-medium">
+                                <button 
+                                    onClick={() => setActiveTab('coder')}
+                                    className={`w-full text-left px-4 py-3 rounded-xl transition-all text-sm backdrop-blur-md border ${activeTab === 'coder' ? 'bg-sky-600/20 text-sky-200 border-sky-500/30' : 'bg-slate-950/40 text-slate-400 border-white/5 hover:bg-slate-900/60 hover:text-white'}`}
+                                >
+                                    👨‍💻 Architect
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('summarizer')}
+                                    className={`w-full text-left px-4 py-3 rounded-xl transition-all text-sm backdrop-blur-md border ${activeTab === 'summarizer' ? 'bg-sky-600/20 text-sky-200 border-sky-500/30' : 'bg-slate-950/40 text-slate-400 border-white/5 hover:bg-slate-900/60 hover:text-white'}`}
+                                >
+                                    📄 Summarizer
+                                </button>
+                            </nav>
+                        </div>
+
+                        {/* SYSTEM STATUS (Replaces Auth Box) */}
+                        <div className="p-4 bg-slate-950/60 rounded-xl border border-white/10 backdrop-blur-md shadow-xl">
+                            <div className="flex items-center gap-2">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">System Online</span>
+                            </div>
+                            <div className="mt-2 text-[10px] text-slate-500 font-mono">
+                                Connected to Neural Core
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* MAIN CONTENT */}
+                    <div className="flex-1 flex flex-col relative min-w-0 bg-transparent">
+                        
+                        {/* HEADER (Simplified) */}
+                        <header className="h-16 flex items-center px-8 justify-end z-10 flex-shrink-0">
+                            <button 
+                                onClick={handleExecute}
+                                disabled={loading}
+                                className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-sky-900/40 border border-sky-400/30 active:scale-[0.98] backdrop-blur-sm flex items-center gap-2"
+                            >
+                                {loading ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Processing...
+                                    </>
+                                ) : 'Execute Protocol'}
+                            </button>
+                        </header>
+
+                        {/* WORKSPACE */}
+                        <div className="flex-1 flex overflow-hidden">
+                            
+                            {/* LEFT: INPUT COLUMN */}
+                            <div className="w-1/2 p-8 overflow-y-auto no-scrollbar">
+                                {activeTab === 'coder' ? (
+                                    <div className="space-y-8 max-w-2xl mx-auto py-2">
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div>
+                                                <label className={labelClasses}>Mode</label>
+                                                <div className="relative">
+                                                <select 
+                                                    value={mode} 
+                                                    onChange={(e) => setMode(e.target.value)}
+                                                    className={`${glassBoxClass} appearance-none font-medium text-sky-300`}
+                                                >
+                                                    <option className="bg-slate-900">Generate Code</option>
+                                                    <option className="bg-slate-900">Debug Code</option>
+                                                    <option className="bg-slate-900">Explain Concept</option>
+                                                </select>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className={labelClasses}>Language</label>
+                                                <div className="relative">
+                                                <select 
+                                                    value={lang} 
+                                                    onChange={(e) => setLang(e.target.value)}
+                                                    className={`${glassBoxClass} appearance-none font-medium text-sky-300`}
+                                                >
+                                                    <option className="bg-slate-900">Python</option>
+                                                    <option className="bg-slate-900">JavaScript</option>
+                                                    <option className="bg-slate-900">Go</option>
+                                                    <option className="bg-slate-900">SQL</option>
+                                                    <option className="bg-slate-900">HTML/CSS</option>
+                                                </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className={labelClasses}>Objective</label>
+                                            <textarea 
+                                                value={query}
+                                                onChange={(e) => setQuery(e.target.value)}
+                                                className={`${glassBoxClass} h-36 resize-none`}
+                                                placeholder="Describe the functionality you need..."
+                                            ></textarea>
+                                        </div>
+
+                                        <div>
+                                            <label className={labelClasses}>Context / Snippet (Optional)</label>
+                                            <textarea 
+                                                value={codeSnippet}
+                                                onChange={(e) => setCodeSnippet(e.target.value)}
+                                                className={`${glassBoxClass} h-48 font-mono text-xs`}
+                                                placeholder="// Paste existing code or error logs here..."
+                                            ></textarea>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6 max-w-2xl mx-auto h-full flex flex-col py-2">
+                                        <label className={labelClasses}>Source Material</label>
+                                        <textarea 
+                                            value={articleText}
+                                            onChange={(e) => setArticleText(e.target.value)}
+                                            className={`${glassBoxClass} flex-1 resize-none`}
+                                            placeholder="Paste article text here..."
+                                        ></textarea>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* RIGHT: OUTPUT COLUMN */}
+                            <div 
+                                ref={outputRef}
+                                className="w-1/2 p-8 overflow-y-auto relative scroll-smooth no-scrollbar"
+                            >
+                                {result ? (
+                                    // SOLID BACKGROUND FOR OUTPUT (Fixed Blur Issue)
+                                    // Changed backdrop-blur to solid bg-slate-950
+                                    <div className="max-w-3xl mx-auto pb-32 animate-fade-in bg-[#020617] p-8 rounded-2xl border border-white/10 shadow-2xl relative z-10">
+                                        <div className="prose max-w-none break-words drop-shadow-sm">
+                                            <div dangerouslySetInnerHTML={{ __html: marked.parse(result.response) }}></div>
+                                        </div>
+                                        
+                                        {result.context && result.context.length > 0 && (
+                                            <div className="mt-12 pt-8 border-t border-white/10">
+                                                <div className="flex items-center gap-2 mb-4">
+                                                    <span className="text-lg">📚</span>
+                                                    <span className="text-xs font-bold text-sky-300 uppercase tracking-widest">References</span>
+                                                </div>
+                                                <div className="flex gap-2 flex-wrap">
+                                                    {result.context.map((src, i) => (
+                                                        <span key={i} className="px-3 py-1.5 bg-slate-900 text-sky-400 text-xs rounded-md border border-white/10 font-medium">
+                                                            {src}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    // Empty State
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 select-none">
+                                        <div className="bg-slate-950/40 p-8 rounded-full mb-6 border border-white/10 shadow-lg backdrop-blur-sm">
+                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-16 h-16 opacity-50">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                                            </svg>
+                                        </div>
+                                        <p className="font-medium text-slate-300 drop-shadow-md">System Ready</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
